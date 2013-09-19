@@ -1,9 +1,10 @@
-#include "OVR.h"
 #include <iostream>
 #include <fstream>
 #include <conio.h>
 #include <string>
+#include <algorithm>
 #include "Windows.h"
+#include "OVR.h"
 
 using namespace OVR;
 using namespace std;
@@ -14,17 +15,11 @@ Ptr<SensorDevice>	pSensor;
 SensorFusion		FusionResult;
 HMDInfo			Info;
 bool			InfoLoaded;
+void WriteConfigFile();
 
 // Fairly sure this is bad practice but fuck it at this point I don't care any more.
-string TempDir = _pgmptr;
-
-string HomeDir = TempDir.substr(0, TempDir.find_last_of("\\/"));
-string Star_Citizen_Exec = HomeDir + ("\\CitizenClient\\Bin64\\StarCitizen.exe");
-string Star_Citizen_Config = HomeDir + ("\\CitizenClient\\USER\\game.cfg");
-
-// Had this problem stuck in my head for 2 days... this is my solution, pass the directory to a WCHAR array... There is probably an easier way but this is the first thing that worked for me.
-int SizeOfCharArray = Star_Citizen_Exec.size();
-WCHAR Exec[MAX_PATH] = { };
+const string TempDir = _pgmptr;
+const string HomeDir = TempDir.substr(0, TempDir.find_last_of("\\/"));
 
 // This will init the oculus and the directory for the star citizen executable.
 void Init()
@@ -49,14 +44,6 @@ void Init()
 	{
 	   FusionResult.AttachToSensor(pSensor);
 	}
-	for (int a=0;a<=SizeOfCharArray;a++)
-    {
-        Exec[a]=Star_Citizen_Exec[a];
-		if (a == SizeOfCharArray)
-		{
-			Exec[a]=NULL;
-		}
-    }
 }
 
 // This I assume clears the connection to the oculus... to be honest this is cyberealitys doing not mine.
@@ -84,21 +71,95 @@ void SendMouseTranslate(const int x, const int y)
 	SendInput(1, &i, sizeof(i));
 }
 
-// Arg this gave me the shits something cronic... pulled the code from some site but CreateProcess was just not liking me at all.
+// Argh this gave me the shits something cronic... pulled the code from some site but CreateProcess was just not liking me at all.
 void StartStarCitizen()
 {
+	// Setting up the variables I will need.
+	string Star_Citizen_Exec = HomeDir + ("\\CitizenClient\\Bin64\\StarCitizen.exe");
+	string Star_Citizen_Config = HomeDir + ("\\SCORE.ini");
+	string Star_Citizen_Game_Config = HomeDir + ("\\CitizenClient\\USER\\game.cfg");
+	string config_line;
+	int SizeOfExecArray = Star_Citizen_Exec.size();
+	WCHAR Exec[MAX_PATH] = { };
+
+	// Convert the executable path into something compatable with the CreateProcess command.
+	for (int a=0;a<=SizeOfExecArray;a++)
+    {
+        Exec[a]=Star_Citizen_Exec[a];
+		if (a == SizeOfExecArray)
+		{
+			Exec[a]=NULL;
+		}
+    }
+
+	// Next setting up the boring bits to actually start an external program.
 	PROCESS_INFORMATION ProcessInfo; //This is what we get as an [out] parameter
 	STARTUPINFO StartupInfo; //This is an [in] parameter
 	ZeroMemory(&StartupInfo, sizeof(StartupInfo));
 	StartupInfo.cb = sizeof StartupInfo ; //Only compulsory field
-	CreateProcess((LPCWSTR)Exec, NULL, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+
+	// Reading info from the config file, if one does not exist write one and use that instead.
+	cout << "Reading SCORE.ini file...";
+	ifstream ini_file;
+	ini_file.open (Star_Citizen_Config);
+	if (ini_file.fail())
+	{
+		cout << " Failed. \n-=Writing a new SCORE.ini now and using that instead=-" << endl;
+		WriteConfigFile();
+		ini_file.open (Star_Citizen_Config);
+	}
+	else
+	{
+		cout << " Success." << endl;
+	}
+	ofstream Config_File;
+	cout << "Writting a new game.cfg file...";
+	Config_File.open(Star_Citizen_Game_Config);
+	if (!Config_File.fail())
+	{
+		while (!ini_file.eof())
+		{
+			getline(ini_file, config_line);
+			Config_File << config_line << endl;	
+		}
+	Config_File.close();
+	ini_file.close();
+	cout << " Success." << endl;
+	}
+	else
+	{
+		cout << " Failed. \n-=Make sure SCORE.exe is in your StarCitizen directory=-\n-=Make sure your game.cfg file is not read only=-" << endl;
+		Config_File.close();
+		ini_file.close();
+	}
+
+	// Now lets pull all this together and kick of the program.
+	cout << "Starting program...";
+	//string Arguments = "+r_motionblur=0";
+	if (!CreateProcess((LPCWSTR)Exec, NULL, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo))
+	{
+		cout << " Failed.\n-=Put SCORE.exe in your StarCitizen directory=-" << endl;
+	}
+	else
+	{
+		cout << " Success." << endl;
+	}
 }
 
 // Does what is says on the box.
 void WriteConfigFile()
 {
+	cout << "Writting a new SCORE.ini file...";
+	string Star_Citizen_Config = HomeDir + ("\\SCORE.ini");
 	ofstream config_file;
 	config_file.open (Star_Citizen_Config);
+	if (config_file.fail())
+	{
+		cout << " Failed. \n-=Make sure the file does not exist or is not read only=-" << endl << endl;
+		config_file.close();
+	}
+	else
+	{
 	config_file << "r_Fullscreen = 1" << endl;
 	config_file << "r_Width = 1280" << endl;
 	config_file << "r_Height = 1600" << endl;
@@ -119,6 +180,8 @@ void WriteConfigFile()
 	config_file << "i_mouse_smooth=0" << endl;
 	config_file << "r_VSync = 0";
 	config_file.close();
+	cout << " Success." << endl;
+	}
 }
 
 // This part generates the outputs from the oculus to be sent to the mouse. and also calls the other subroutines.
@@ -127,24 +190,19 @@ void Output(const float Pred)
 	cout << "------ Freeboot's Star Citizen Oculus Interpreter ------" << endl;
 	cout << "Press ENTER to do all that stuff to good make game look." << endl;
 	cout << "--------------------------------------------------------" << endl;	
-	cout << "You have selected: " << Pred << "ms of prediction." << endl;
+	cout << "You have selected: " << Pred << " ms of prediction." << endl;
 
 	cin.get();
 
 	cout << "--------------------------------------------------------" << endl;
-	cout << "Initialising oculus rift settings..." << endl;
 	int NewX, NewY, OldX = 0, OldY = 0, DeltaX = 0, DeltaY = 0;
 	const int multi = 1044;
 	float yaw, pitch, roll;
 	float PredMS = (Pred / 1000);
-	cout << "--------------------------------------------------------" << endl;
-	cout << "Writting a new configeration file at location here:" << endl << Star_Citizen_Config << endl;
-	WriteConfigFile();
-	cout << "--------------------------------------------------------" << endl;
-	cout << "Starting program located here:" << endl << Star_Citizen_Exec << endl;
+
 	StartStarCitizen();
 	cout << "--------------------------------------------------------" << endl;
-	cout << "Enjoy, close this after you are done by presing ESC." << endl;
+	cout << "Enjoy, close this AFTER you are done by presing ESC." << endl;
 
 	while(pSensor)
 	{
@@ -164,7 +222,7 @@ void Output(const float Pred)
 		OldY = NewY;
 		}
 
-		//Sleep(1);
+		Sleep(1);
 
 		if (_kbhit()) exit(0);
 	}
