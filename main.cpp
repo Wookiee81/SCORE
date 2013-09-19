@@ -187,7 +187,7 @@ void WriteConfigFile()
 // This part generates the outputs from the oculus to be sent to the mouse. and also calls the other subroutines.
 void Output(const float Pred)
 {
-	cout << "------ Freeboot's Star Citizen Oculus Interpreter ------" << endl;
+	cout << "- Freeboot's Star Citizen Oculus Rift Emulator V0.5.1  -" << endl;
 	cout << "Press ENTER to do all that stuff to good make game look." << endl;
 	cout << "--------------------------------------------------------" << endl;	
 	cout << "You have selected: " << Pred << " ms of prediction." << endl;
